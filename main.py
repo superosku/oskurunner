@@ -67,48 +67,35 @@ class PieceGenerator:
             piece.print()
 
 
-class Board:
-    def __init__(self):
+class Ai:
+    def __init__(self, board, number):
         self.piece_generator = PieceGenerator()
 
-        self.played_points = {}
-        self.played_points_by_player = {
-            0: [],
-            1: [],
-            2: [],
-            3: [],
-        }
-        self.played_pieces_by_player = {
-            0: 0,
-            1: 0,
-            2: 0,
-            3: 0,
-        }
-        self.turn = 0
+        self.board = board
+        self.number = number
 
-    def print(self):
-        print(' ' + '-' * 25, file=sys.stderr)
-        for y in range(25):
-            print('|', end='', sep='', file=sys.stderr)
-            for x in range(25):
-                letter = ' '
-                for key, values in self.played_points_by_player.items():
-                    if (x, y) in values:
-                        letter = (
-                            ['\033[94m', '\033[92m', '\033[93m', '\033[91m'][key] +
-                            # '\u2588' +
-                            '#' +
-                            # str(key) +
-                            '\033[0m'
-                        )
-                print(letter, end='', sep='', file=sys.stderr)
-            print('|', end='', sep='', file=sys.stderr)
-            print('', file=sys.stderr)
-        print(' ' + '-' * 25, file=sys.stderr)
+        self.played_points = []
+
+    def make_move(self):
+        moves = self.possible_moves()
+        if not moves:
+            self.board.increment_turn()
+            return False
+
+        offset, piece = random.choice(moves)
+
+        for point in piece.points:
+            self.played_points.append((
+                point[0] + offset[0],
+                point[1] + offset[1]
+            ))
+
+        self.board.do_move(offset, piece)
+
+        return True
 
     def possible_move_points(self):
-        player_points = self.played_points_by_player[self.turn]
-        if len(player_points) == 0:
+        if len(self.played_points) == 0:
             return [
                 (0, 0),
                 (24, 0),
@@ -116,7 +103,7 @@ class Board:
                 (24, 24)
             ]
         points = []
-        for point in player_points:
+        for point in self.played_points:
             points.append((point[0] + 1, point[1] + 1))
             points.append((point[0] - 1, point[1] + 1))
             points.append((point[0] - 1, point[1] - 1))
@@ -161,14 +148,57 @@ class Board:
             return False
         for point in new_points:
             if (
-                point in self.played_points or
-                (point[0] - 1, point[1]) in self.played_points or
-                (point[0] + 1, point[1]) in self.played_points or
-                (point[0], point[1] + 1) in self.played_points or
-                (point[0], point[1] - 1) in self.played_points
+                self.board.is_taken(point) or
+                self.board.is_taken((point[0] - 1, point[1])) or
+                self.board.is_taken((point[0] + 1, point[1])) or
+                self.board.is_taken((point[0], point[1] + 1)) or
+                self.board.is_taken((point[0], point[1] - 1))
             ):
                 return False
         return True
+
+
+class Board:
+    def __init__(self):
+        self.piece_generator = PieceGenerator()
+
+        self.played_points = {}
+        self.played_points_by_player = {
+            0: [],
+            1: [],
+            2: [],
+            3: [],
+        }
+        self.played_pieces_by_player = {
+            0: 0,
+            1: 0,
+            2: 0,
+            3: 0,
+        }
+        self.turn = 0
+
+    def is_taken(self, point):
+        return point in self.played_points
+
+    def print(self):
+        print(' ' + '-' * 25, file=sys.stderr)
+        for y in range(25):
+            print('|', end='', sep='', file=sys.stderr)
+            for x in range(25):
+                letter = ' '
+                for key, values in self.played_points_by_player.items():
+                    if (x, y) in values:
+                        letter = (
+                            ['\033[94m', '\033[92m', '\033[93m', '\033[91m'][key] +
+                            # '\u2588' +
+                            '#' +
+                            # str(key) +
+                            '\033[0m'
+                        )
+                print(letter, end='', sep='', file=sys.stderr)
+            print('|', end='', sep='', file=sys.stderr)
+            print('', file=sys.stderr)
+        print(' ' + '-' * 25, file=sys.stderr)
 
     def do_move(self, offset, piece):
         offset_x, offset_y = offset
@@ -182,6 +212,9 @@ class Board:
             self.played_points[point] = True
         self.played_points_by_player[self.turn] += points_played
         self.played_pieces_by_player[self.turn] += 1
+        self.increment_turn()
+
+    def increment_turn(self):
         self.turn = (self.turn + 1) % 4
 
     def print_points(self):
@@ -247,38 +280,26 @@ class GameRunner:
 
 class DebugRunner:
     def __init__(self):
-        self.pieces = PieceGenerator()
-        self.pieces.print_pieces()
-        self.board = Board()
+        pass
 
     def run(self):
-        board = self.board
+        board = Board()
+        ais = {
+            Ai(board, i): True
+            for i in range(4)
+        }
 
-        board.print()
-        print(board.possible_move_points())
-        for offset, piece in board.possible_moves():
-            print(offset, piece.points)
-
-        counter = 0
-        while True:
-            if counter > 5:
-                break
-            moves = board.possible_moves()
-            if not moves:
-                counter += 1
-                board.turn = (board.turn + 1) % 4
-                continue
-            offset, piece = random.choice(moves)
-            board.do_move(offset, piece)
-            board.print()
-
-            board.print_points()
+        while all(ais.values()):
+            for ai in ais:
+                if not ai.make_move():
+                    ais[ai] = False
+                board.print()
 
         board.print()
         board.print_points()
 
 if __name__ == '__main__':
-    GameRunner().run()
-    # DebugRunner().run()
+    # GameRunner().run()
+    DebugRunner().run()
 
 
