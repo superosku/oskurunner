@@ -76,6 +76,12 @@ class Board:
             2: [],
             3: [],
         }
+        self.played_pieces_by_player = {
+            0: [],
+            1: [],
+            2: [],
+            3: [],
+        }
         self.turn = 0
 
     def print(self):
@@ -93,7 +99,9 @@ class Board:
                             '\033[0m'
                         )
                 print(letter, end='', sep='')
+            print('|', end='', sep='')
             print('')
+        print(' ' + '-' * 25)
 
     def possible_move_points(self):
         player_points = self.played_points_by_player[self.turn]
@@ -167,7 +175,13 @@ class Board:
         ]
         self.played_points += points_played
         self.played_points_by_player[self.turn] += points_played
+        self.played_pieces_by_player[self.turn] += [(offset, piece)]
         self.turn = (self.turn + 1) % 4
+
+    def print_points(self):
+        print('points')
+        for key, value in self.played_pieces_by_player.items():
+            print(key, len(value))
 
 if __name__ == '__main__':
     pieces = PieceGenerator()
@@ -192,6 +206,9 @@ if __name__ == '__main__':
         board.do_move(offset, piece)
         board.print()
 
+        board.print_points()
+
     board.print()
+    board.print_points()
 
     # print(board.possible_moves())
