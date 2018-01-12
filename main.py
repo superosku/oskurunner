@@ -95,7 +95,7 @@ class Ai:
 
         self.board.do_move(offset, piece)
 
-        return True
+        return piece, offset
 
     def update_move_point_cache(self, point):
         self._possible_move_point_cache.append((point[0] + 1, point[1] + 1))
@@ -268,17 +268,25 @@ class GameRunner:
             self.board.add_played_points(opponent_moves)
             self.board.print()
 
+        ai = Ai(self.board, 0)
+
         while True:
-            possible_moves = self.board.possible_moves()
-            if not possible_moves:
+            move = ai.make_move()
+            if not move:
                 sys.exit()
-            else:
-                offset, piece = random.choice(possible_moves)
-                self.board.do_move(offset, piece)
-                print(
-                    piece.len,
-                    ' '.join(['{} {}'.format(x + 1 + offset[0], y + 1 + offset[1]) for x, y in piece.points])
-                )
+
+            piece, offset = move
+
+            # possible_moves = self.board.possible_moves()
+            # if not possible_moves:
+            #     sys.exit()
+            # else:
+            #     offset, piece = random.choice(possible_moves)
+            #     self.board.do_move(offset, piece)
+            print(
+                piece.len,
+                ' '.join(['{} {}'.format(x + 1 + offset[0], y + 1 + offset[1]) for x, y in piece.points])
+            )
             sys.stdout.flush()
 
             self.board.print()
@@ -310,7 +318,7 @@ class DebugRunner:
         board.print_points()
 
 if __name__ == '__main__':
-    random.seed(0)
+    # random.seed(0)
     # GameRunner().run()
     DebugRunner().run()
 
