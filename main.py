@@ -71,7 +71,7 @@ class Board:
     def __init__(self):
         self.piece_generator = PieceGenerator()
 
-        self.played_points = []
+        self.played_points = {}
         self.played_points_by_player = {
             0: [],
             1: [],
@@ -178,7 +178,8 @@ class Board:
         self.add_played_points(points_played)
 
     def add_played_points(self, points_played):
-        self.played_points += points_played
+        for point in points_played:
+            self.played_points[point] = True
         self.played_points_by_player[self.turn] += points_played
         self.played_pieces_by_player[self.turn] += 1
         self.turn = (self.turn + 1) % 4
@@ -277,7 +278,7 @@ class DebugRunner:
         board.print_points()
 
 if __name__ == '__main__':
-    # GameRunner().run()
-    DebugRunner().run()
+    GameRunner().run()
+    # DebugRunner().run()
 
 
