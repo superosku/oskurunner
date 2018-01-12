@@ -1,5 +1,7 @@
 import random
 
+import sys
+
 
 class Piece:
     def __init__(self, points):
@@ -77,41 +79,42 @@ class Board:
             3: [],
         }
         self.played_pieces_by_player = {
-            0: [],
-            1: [],
-            2: [],
-            3: [],
+            0: 0,
+            1: 0,
+            2: 0,
+            3: 0,
         }
         self.turn = 0
 
     def print(self):
-        print(' ' + '-' * 25)
+        print(' ' + '-' * 25, file=sys.stderr)
         for y in range(25):
-            print('|', end='', sep='')
+            print('|', end='', sep='', file=sys.stderr)
             for x in range(25):
                 letter = ' '
                 for key, values in self.played_points_by_player.items():
                     if (x, y) in values:
                         letter = (
                             ['\033[94m', '\033[92m', '\033[93m', '\033[91m'][key] +
+                            # '\u2588' +
                             '#' +
                             # str(key) +
                             '\033[0m'
                         )
-                print(letter, end='', sep='')
-            print('|', end='', sep='')
-            print('')
-        print(' ' + '-' * 25)
+                print(letter, end='', sep='', file=sys.stderr)
+            print('|', end='', sep='', file=sys.stderr)
+            print('', file=sys.stderr)
+        print(' ' + '-' * 25, file=sys.stderr)
 
     def possible_move_points(self):
         player_points = self.played_points_by_player[self.turn]
         if len(player_points) == 0:
-            point = [(
-                0 + 24 * (self.turn % 2),
-                0 + 24 * int(self.turn / 2),
-            )]
-            # from pdb import set_trace; set_trace()
-            return point
+            return [
+                (0, 0),
+                (24, 0),
+                (0, 24),
+                (24, 24)
+            ]
         points = []
         for point in player_points:
             points.append((point[0] + 1, point[1] + 1))
@@ -140,7 +143,6 @@ class Board:
         return possible_moves
 
     def is_possible_move(self, offset, piece):
-        # print('is_possible_move', offset, piece.points)
         offset_x, offset_y = offset
         new_points = [
             (
@@ -153,9 +155,9 @@ class Board:
             return False
         if min([y for x, y in new_points]) < 0:
             return False
-        if min([x for x, y in new_points]) >= 25:
+        if max([x for x, y in new_points]) >= 25:
             return False
-        if min([y for x, y in new_points]) >= 25:
+        if max([y for x, y in new_points]) >= 25:
             return False
         for point in new_points:
             if (
@@ -173,42 +175,109 @@ class Board:
         points_played = [
             (x + offset_x, y + offset_y) for x, y in piece.points
         ]
+        self.add_played_points(points_played)
+
+    def add_played_points(self, points_played):
         self.played_points += points_played
         self.played_points_by_player[self.turn] += points_played
-        self.played_pieces_by_player[self.turn] += [(offset, piece)]
+        self.played_pieces_by_player[self.turn] += 1
         self.turn = (self.turn + 1) % 4
 
     def print_points(self):
         print('points')
         for key, value in self.played_pieces_by_player.items():
-            print(key, len(value))
+            print(key, value)
 
-if __name__ == '__main__':
-    pieces = PieceGenerator()
-    pieces.print_pieces()
 
-    board = Board()
-    board.print()
-    print(board.possible_move_points())
-    for offset, piece in board.possible_moves():
-        print(offset, piece.points)
+class GameRunner:
+    def __init__(self):
+        self.pieces = PieceGenerator()
+        self.board = Board()
 
-    counter = 0
-    while True:
-        if counter > 5:
-            break
-        moves = board.possible_moves()
-        if not moves:
-            counter += 1
-            board.turn = (board.turn + 1) % 4
-            continue
-        offset, piece = random.choice(moves)
-        board.do_move(offset, piece)
+    def read_input(self):
+        return list(map(int, input().split()))
+
+    def read_opponent_move(self):
+        input = self.read_input()
+        if input[0] == -1:
+            sys.exit()
+        moves = [i - 1 for i in input[1:]]
+        points = []
+        while moves:
+            points.append((
+                moves.pop(0),
+                moves.pop(0)
+            ))
+        return points
+
+    def run(self):
+        print('oskurunner')
+        board_size, player_count, player_number = self.read_input()
+
+        # assert board_size == 25
+        # assert player_count == 4
+        # assert player_number == 1
+
+        for i in range(player_number - 1):
+            opponent_moves = self.read_opponent_move()
+            self.board.add_played_points(opponent_moves)
+            self.board.print()
+
+        while True:
+            possible_moves = self.board.possible_moves()
+            if not possible_moves:
+                sys.exit()
+            else:
+                offset, piece = random.choice(possible_moves)
+                self.board.do_move(offset, piece)
+                print(
+                    piece.len,
+                    ' '.join(['{} {}'.format(x + 1 + offset[0], y + 1 + offset[1]) for x, y in piece.points])
+                )
+            sys.stdout.flush()
+
+            self.board.print()
+
+            for i in range(3):
+                opponent_moves = self.read_opponent_move()
+                self.board.add_played_points(opponent_moves)
+                self.board.print()
+
+
+class DebugRunner:
+    def __init__(self):
+        self.pieces = PieceGenerator()
+        self.pieces.print_pieces()
+        self.board = Board()
+
+    def run(self):
+        board = self.board
+
         board.print()
+        print(board.possible_move_points())
+        for offset, piece in board.possible_moves():
+            print(offset, piece.points)
 
+        counter = 0
+        while True:
+            if counter > 5:
+                break
+            moves = board.possible_moves()
+            if not moves:
+                counter += 1
+                board.turn = (board.turn + 1) % 4
+                continue
+            offset, piece = random.choice(moves)
+            board.do_move(offset, piece)
+            board.print()
+
+            board.print_points()
+
+        board.print()
         board.print_points()
 
-    board.print()
-    board.print_points()
+if __name__ == '__main__':
+    # GameRunner().run()
+    DebugRunner().run()
 
-    # print(board.possible_moves())
+
