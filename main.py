@@ -76,6 +76,8 @@ class Ai:
 
         self.played_points = []
 
+        self._possible_move_point_cache = []
+
     def make_move(self):
         moves = self.possible_moves()
         if not moves:
@@ -89,11 +91,30 @@ class Ai:
                 point[0] + offset[0],
                 point[1] + offset[1]
             ))
+            self.update_move_point_cache((point[0] + offset[0], point[1] + offset[1]))
 
         self.board.do_move(offset, piece)
 
         return True
 
+    def update_move_point_cache(self, point):
+        self._possible_move_point_cache.append((point[0] + 1, point[1] + 1))
+        self._possible_move_point_cache.append((point[0] - 1, point[1] + 1))
+        self._possible_move_point_cache.append((point[0] - 1, point[1] - 1))
+        self._possible_move_point_cache.append((point[0] + 1, point[1] - 1))
+        self._possible_move_point_cache = list(set(self._possible_move_point_cache))
+        self._possible_move_point_cache = [
+            point for point in self._possible_move_point_cache if
+            not (
+                self.board.is_taken(point) or
+                self.board.is_taken((point[0] + 1, point[1])) or
+                self.board.is_taken((point[0], point[1] + 1)) or
+                self.board.is_taken((point[0] - 1, point[1])) or
+                self.board.is_taken((point[0], point[1] - 1))
+            )
+        ]
+
+    @property
     def possible_move_points(self):
         if len(self.played_points) == 0:
             return [
@@ -102,21 +123,11 @@ class Ai:
                 (0, 24),
                 (24, 24)
             ]
-        points = []
-        for point in self.played_points:
-            points.append((point[0] + 1, point[1] + 1))
-            points.append((point[0] - 1, point[1] + 1))
-            points.append((point[0] - 1, point[1] - 1))
-            points.append((point[0] + 1, point[1] - 1))
-        return [
-            point for point in points
-            if point not in self.played_points
-        ]
+        return self._possible_move_point_cache
 
     def possible_moves(self):
-        move_points = self.possible_move_points()
         possible_moves = []
-        for move_x, move_y in move_points:
+        for move_x, move_y in self.possible_move_points:
             for piece in self.piece_generator.pieces:
                 for piece_x, piece_y in piece.points:
                     offset = (
@@ -293,12 +304,13 @@ class DebugRunner:
             for ai in ais:
                 if not ai.make_move():
                     ais[ai] = False
-                board.print()
+            board.print()
 
         board.print()
         board.print_points()
 
 if __name__ == '__main__':
+    random.seed(0)
     # GameRunner().run()
     DebugRunner().run()
 
