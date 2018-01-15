@@ -3,34 +3,92 @@ import random
 import sys
 
 
+MAX_PIECE_SIZE = 4
+
+
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    def __add__(self, other):
+        return Point(self.x + other.x, self.y + other.y)
+
+    def __neg__(self):
+        return Point(-self.x, -self.y)
+
+    def __sub__(self, other):
+        return Point(self.x - other.x, self.y - other.y)
+
+    def __repr__(self):
+        return f'P({self.x}, {self.y})'
+
+    def __gt__(self, other):
+        '''
+        Gives us something that can be used to sort points
+        :param other:
+        :return:
+        '''
+        return self.__hash__() > other.__hash__()
+
+    def __hash__(self):
+        return self.x + self.y * 1000
+
+    def dist(self, other):
+        return (self.x - other.x) * (self.y - other.y)
+
+
+assert (Point(1, 2) + Point(1, 2)).x == 2
+assert (Point(1, 2) + Point(1, 2)).y == 4
+assert str(Point(1, 2)) == 'P(1, 2)'
+assert Point(1, 1) == Point(1, 1)
+assert Point(1, 1) != Point(1, 2)
+assert Point(1, 1) != Point(2, 1)
+assert Point(11, 123).dist(Point(1, 5)) == 1180
+
+
 class Piece:
     def __init__(self, points):
-        min_x = min([x for x, y in points])
-        min_y = min([y for x, y in points])
+        '''
+        Gets list of points as a parameter and normalizes and sorts them to
+        create a piece
+        :param points:
+        '''
+        min_x = min([point.x for point in points])
+        min_y = min([point.y for point in points])
+        sorted(points)
         self.points = sorted(list(set([
-            (x - min_x, y - min_y) for x, y in points
-        ])), key=lambda i: i[0] * 10 + i[1])
+            point - Point(min_x, min_y) for point in points
+        ])))
 
     @property
     def len(self):
         return len(self.points)
 
     def get_child_pieces(self):
-        if len(self.points) >= 4:
+        '''
+        Returns all pieces that can be get from this piece by extending this
+        piece from any possible direction
+        :return:
+        '''
+        if len(self.points) >= MAX_PIECE_SIZE:
             return []
         pieces = []
-        for x, y in self.points:
+        for point in self.points:
             pieces.append(Piece(
-                [point for point in self.points] + [(x + 1, y)]
+                [point for point in self.points] + [point + Point(1, 0)]
             ))
             pieces.append(Piece(
-                [point for point in self.points] + [(x, y + 1)]
+                [point for point in self.points] + [point + Point(0, 1)]
             ))
             pieces.append(Piece(
-                [point for point in self.points] + [(x, y - 1)]
+                [point for point in self.points] + [point - Point(1, 0)]
             ))
             pieces.append(Piece(
-                [point for point in self.points] + [(x - 1, y)]
+                [point for point in self.points] + [point - Point(0, 1)]
             ))
         return [
             piece for piece in pieces if piece != self
@@ -38,10 +96,9 @@ class Piece:
 
     def print(self):
         print(self.points)
-        # print()
-        for y in range(max([y for x, y in self.points]) + 1):
+        for y in range(max([point.y for point in self.points]) + 1):
             for x in range(4):
-                print('#' if (x, y) in self.points else ' ', end='', sep='')
+                print('#' if Point(x, y) in self.points else ' ', end='', sep='')
             print('')
 
     def __eq__(self, other):
@@ -52,7 +109,7 @@ class PieceGenerator:
     def __init__(self):
         self.pieces = []
 
-        piece = Piece([(0, 0)])
+        piece = Piece([Point(0, 0)])
         self.pieces.append(piece)
         self.generate_and_add_new_pieces(piece)
 
@@ -87,53 +144,45 @@ class Ai:
         offset, piece = random.choice(moves)
 
         for point in piece.points:
-            self.played_points.append((
-                point[0] + offset[0],
-                point[1] + offset[1]
-            ))
-            self.update_move_point_cache((point[0] + offset[0], point[1] + offset[1]))
+            self.played_points.append(point + offset)
+            self.update_move_point_cache(point + offset)
 
         self.board.do_move(offset, piece)
 
         return piece, offset
 
     def update_move_point_cache(self, point):
-        self._possible_move_point_cache.append((point[0] + 1, point[1] + 1))
-        self._possible_move_point_cache.append((point[0] - 1, point[1] + 1))
-        self._possible_move_point_cache.append((point[0] - 1, point[1] - 1))
-        self._possible_move_point_cache.append((point[0] + 1, point[1] - 1))
-        self._possible_move_point_cache = list(set(self._possible_move_point_cache))
+        self._possible_move_point_cache.append(point + Point(1, 1))
+        self._possible_move_point_cache.append(point + Point(-1, 1))
+        self._possible_move_point_cache.append(point + Point(1, -1))
+        self._possible_move_point_cache.append(point + Point(-1, -1))
+
+        self._possible_move_point_cache = list(set(
+            self._possible_move_point_cache
+        ))
+
         self._possible_move_point_cache = [
             point for point in self._possible_move_point_cache if
-            not (
-                self.board.is_taken(point) or
-                self.board.is_taken((point[0] + 1, point[1])) or
-                self.board.is_taken((point[0], point[1] + 1)) or
-                self.board.is_taken((point[0] - 1, point[1])) or
-                self.board.is_taken((point[0], point[1] - 1))
-            )
+            not self.board.is_taken_or_next_is_taken(point)
         ]
 
     @property
     def possible_move_points(self):
         if len(self.played_points) == 0:
             return [
-                (0, 0),
-                (24, 0),
-                (0, 24),
-                (24, 24)
+                Point(0, 0),
+                Point(24, 0),
+                Point(0, 24),
+                Point(24, 24)
             ]
         return self._possible_move_point_cache
 
     def possible_moves(self):
         possible_moves = []
-        for move_x, move_y in self.possible_move_points:
+        for posible_point in self.possible_move_points:
             for piece in self.piece_generator.pieces:
-                for piece_x, piece_y in piece.points:
-                    offset = (
-                        move_x - piece_x,
-                        move_y - piece_y
-                    )
+                for piece_point in piece.points:
+                    offset = posible_point - piece_point
                     if self.is_possible_move(offset, piece):
                         possible_moves.append(
                             (offset, piece)
@@ -141,30 +190,19 @@ class Ai:
         return possible_moves
 
     def is_possible_move(self, offset, piece):
-        offset_x, offset_y = offset
         new_points = [
-            (
-                x + offset_x,
-                y + offset_y
-            )
-            for x, y in piece.points
+            point + offset for point in piece.points
         ]
-        if min([x for x, y in new_points]) < 0:
+        if min([point.x for point in new_points]) < 0:
             return False
-        if min([y for x, y in new_points]) < 0:
+        if min([point.y for point in new_points]) < 0:
             return False
-        if max([x for x, y in new_points]) >= 25:
+        if max([point.x for point in new_points]) >= 25:
             return False
-        if max([y for x, y in new_points]) >= 25:
+        if max([point.y for point in new_points]) >= 25:
             return False
         for point in new_points:
-            if (
-                self.board.is_taken(point) or
-                self.board.is_taken((point[0] - 1, point[1])) or
-                self.board.is_taken((point[0] + 1, point[1])) or
-                self.board.is_taken((point[0], point[1] + 1)) or
-                self.board.is_taken((point[0], point[1] - 1))
-            ):
+            if self.board.is_taken_or_next_is_taken(point):
                 return False
         return True
 
@@ -191,14 +229,23 @@ class Board:
     def is_taken(self, point):
         return point in self.played_points
 
+    def is_taken_or_next_is_taken(self, point):
+        return (
+            self.is_taken(point) or
+            self.is_taken(point + Point(1, 0)) or
+            self.is_taken(point + Point(0, 1)) or
+            self.is_taken(point - Point(1, 0)) or
+            self.is_taken(point - Point(0, 1))
+        )
+
     def print(self):
         print(' ' + '-' * 25, file=sys.stderr)
         for y in range(25):
             print('|', end='', sep='', file=sys.stderr)
             for x in range(25):
                 letter = ' '
-                for key, values in self.played_points_by_player.items():
-                    if (x, y) in values:
+                for key, points in self.played_points_by_player.items():
+                    if Point(x, y) in points:
                         letter = (
                             ['\033[94m', '\033[92m', '\033[93m', '\033[91m'][key] +
                             # '\u2588' +
@@ -212,9 +259,8 @@ class Board:
         print(' ' + '-' * 25, file=sys.stderr)
 
     def do_move(self, offset, piece):
-        offset_x, offset_y = offset
         points_played = [
-            (x + offset_x, y + offset_y) for x, y in piece.points
+            point + offset for point in piece.points
         ]
         self.add_played_points(points_played)
 
