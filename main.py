@@ -2,6 +2,7 @@ import random
 
 import sys
 
+import math
 
 MAX_PIECE_SIZE = 4
 
@@ -37,8 +38,11 @@ class Point:
     def __hash__(self):
         return self.x + self.y * 1000
 
-    def dist(self, other):
-        return (self.x - other.x) * (self.y - other.y)
+    def manhattan_dist(self, other):
+        return abs(self.x - other.x) + abs(self.y - other.y)
+
+    def euqlidean_dist(self, other):
+        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
 
 
 assert (Point(1, 2) + Point(1, 2)).x == 2
@@ -47,7 +51,7 @@ assert str(Point(1, 2)) == 'P(1, 2)'
 assert Point(1, 1) == Point(1, 1)
 assert Point(1, 1) != Point(1, 2)
 assert Point(1, 1) != Point(2, 1)
-assert Point(11, 123).dist(Point(1, 5)) == 1180
+# assert Point(11, 123).dist(Point(1, 5)) == 1180
 
 
 class Piece:
@@ -120,11 +124,15 @@ class PieceGenerator:
                 self.generate_and_add_new_pieces(candidate_piece)
 
     def print_pieces(self):
-        for piece in self.pieces:
+        for i, piece in enumerate(self.pieces):
+            print('Piece nro', i)
             piece.print()
 
 
-class Ai:
+# PieceGenerator().print_pieces()
+
+
+class AiBase:
     def __init__(self, board, number):
         self.piece_generator = PieceGenerator()
 
@@ -134,6 +142,10 @@ class Ai:
         self.played_points = []
 
         self._possible_move_point_cache = []
+        self.first_move_point = None
+
+    def rate_move(self, offset, piece):
+        raise NotImplementedError()
 
     def make_move(self):
         moves = self.possible_moves()
@@ -141,7 +153,17 @@ class Ai:
             self.board.increment_turn()
             return False
 
-        offset, piece = random.choice(moves)
+        offset, piece = sorted(
+            [(offset, piece) for offset, piece in moves],
+            key=lambda x: -self.rate_move(x[0], x[1])
+        )[0]
+
+        if not self.first_move_point:
+            self.first_move_point = [
+                point + offset
+                for point in piece.points
+                if point + offset in self.possible_move_points
+            ][0]
 
         for point in piece.points:
             self.played_points.append(point + offset)
@@ -205,6 +227,32 @@ class Ai:
             if self.board.is_taken_or_next_is_taken(point):
                 return False
         return True
+
+
+class RandomAi(AiBase):
+    def rate_move(self, offset, piece):
+        return random.random()
+
+
+class PointAi(AiBase):
+    def rate_move(self, offset, piece):
+        return 10 - piece.len + random.random()
+
+
+class DistanceAi(AiBase):
+    def rate_move(self, offset, piece):
+        if self.first_move_point:
+            return max([
+                self.first_move_point.euqlidean_dist(offset + piece_point)
+                for piece_point in piece.points]
+            ) + 1 if piece in [
+                self.board.piece_generator.pieces[17],
+                self.board.piece_generator.pieces[9],
+                self.board.piece_generator.pieces[7],
+                self.board.piece_generator.pieces[19],
+            ] else 0
+        return 0
+
 
 
 class Board:
@@ -277,7 +325,12 @@ class Board:
     def print_points(self):
         print('points')
         for key, value in self.played_pieces_by_player.items():
-            print(key, value)
+            print(
+                ['\033[94m', '\033[92m', '\033[93m', '\033[91m'][key] +
+                str(key) +
+                '\033[0m',
+                value
+            )
 
 
 class GameRunner:
@@ -295,14 +348,14 @@ class GameRunner:
         moves = [i - 1 for i in input[1:]]
         points = []
         while moves:
-            points.append((
+            points.append(Point(
                 moves.pop(0),
                 moves.pop(0)
             ))
         return points
 
-    def run(self):
-        print('oskurunner')
+    def run(self, ai_class):
+        print('oskuruner')
         board_size, player_count, player_number = self.read_input()
 
         # assert board_size == 25
@@ -314,7 +367,7 @@ class GameRunner:
             self.board.add_played_points(opponent_moves)
             self.board.print()
 
-        ai = Ai(self.board, 0)
+        ai = ai_class(self.board, 0)
 
         while True:
             move = ai.make_move()
@@ -331,7 +384,11 @@ class GameRunner:
             #     self.board.do_move(offset, piece)
             print(
                 piece.len,
-                ' '.join(['{} {}'.format(x + 1 + offset[0], y + 1 + offset[1]) for x, y in piece.points])
+                # ' '.join(['{} {}'.format(x + 1 + offset[0], y + 1 + offset[1]) for x, y in piece.points])
+                ' '.join(['{} {}'.format(
+                    (point + offset).x + 1,
+                    (point + offset).y + 1,
+                ) for point in piece.points])
             )
             sys.stdout.flush()
 
@@ -350,11 +407,21 @@ class DebugRunner:
     def run(self):
         board = Board()
         ais = {
-            Ai(board, i): True
-            for i in range(4)
+            c(board, i): True
+            for i, c in enumerate([
+                RandomAi,
+                RandomAi,
+                # RandomAi,
+                DistanceAi,
+                # RandomAi,
+                PointAi,
+                # PointAi,
+                # PointAi,
+                # PointAi,
+            ])
         }
 
-        while all(ais.values()):
+        while any(ais.values()):
             for ai in ais:
                 if not ai.make_move():
                     ais[ai] = False
@@ -363,9 +430,15 @@ class DebugRunner:
         board.print()
         board.print_points()
 
+
 if __name__ == '__main__':
-    # random.seed(0)
-    # GameRunner().run()
-    DebugRunner().run()
+    random.seed(0)
+    GameRunner().run(RandomAi)
+    # GameRunner().run(random.choice([
+    #     RandomAi,
+    #     DistanceAi,
+    #     # PointAi
+    # ]))
+    # # DebugRunner().run()
 
 
